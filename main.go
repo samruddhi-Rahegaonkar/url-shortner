@@ -11,6 +11,7 @@ import (
 func main() {
 
 	database.ConnectDB()
+	database.ConnectRedis()
 
 	http.HandleFunc(
 		"/register",

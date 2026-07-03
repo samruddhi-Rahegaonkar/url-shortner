@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -35,10 +36,13 @@ func InitSchema() {
 }
 func ConnectDB() {
 	var err error
-
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		fmt.Println("Database URL is not set")
+	}
 	DB, err = pgxpool.New(
 		context.Background(),
-		"postgres://postgres:root@postgres:5432/urlshortner",
+		dbURL,
 	)
 	if err != nil {
 		panic(err)
