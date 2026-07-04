@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 	"url_shortner/database"
 	"url_shortner/models"
 )
@@ -41,9 +42,22 @@ func CreateURL(originalURL string, userID int) (string, error) {
 		return "", err
 	}
 
+	// Store in Redis for 24 hours
+	err = database.RedisClient.Set(
+		database.Ctx,
+		shortURL,
+		originalURL,
+		24*time.Hour,
+	).Err()
+
+	if err != nil {
+		fmt.Println("Redis SET error:", err)
+	}
+
 	return shortURL, nil
 }
 func getURL(shortURL string) (models.URL, error) {
+	fmt.Println("📦 Fetching from PostgreSQL")
 
 	var url models.URL
 
@@ -75,7 +89,22 @@ func getURL(shortURL string) (models.URL, error) {
 	return url, nil
 }
 func HandleRedirect(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("➡️ HandleRedirect called:", r.Method, r.URL.Path)
+
 	id := r.URL.Path[1:]
+
+	originalURL, err := database.RedisClient.Get(
+		database.Ctx,
+		id,
+	).Result()
+
+	if err == nil {
+		fmt.Println("✅ Cache Hit")
+		http.Redirect(w, r, originalURL, http.StatusFound)
+		return
+	}
+
+	fmt.Println("❌ Cache Miss")
 
 	urlData, err := getURL(id)
 	if err != nil {
@@ -83,6 +112,16 @@ func HandleRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = database.RedisClient.Set(
+		database.Ctx,
+		id,
+		urlData.OriginalURL,
+		24*time.Hour,
+	).Err()
+
+	if err != nil {
+		fmt.Println("Redis SET error:", err)
+	}
 	http.Redirect(w, r, urlData.OriginalURL, http.StatusFound)
 }
 func ShortenURLHandler(w http.ResponseWriter, r *http.Request) {
